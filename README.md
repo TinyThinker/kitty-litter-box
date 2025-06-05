@@ -17,11 +17,11 @@ To develop a personal tool that helps manage a cluttered Gmail inbox by providin
     * Total Unread Email Count.
 * **Technical Steps:**
     1.  **Google Cloud Project Setup & Gmail API Enablement:**
-        * Go to the Google Cloud Console: [https://console.cloud.google.com/](https://console.cloud.google.com/)
+        * Go to the [Google Cloud Console](https://console.cloud.google.com/).
         * Create a New Project (e.g., "Gmail Inbox Manager").
         * Navigate to "APIs & Services" > "Enabled APIs & services".
         * Click "+ ENABLE APIS AND SERVICES".
-        * Search for "Gmail API" and click "ENABLE".
+        * Search for "[Gmail API](https://developers.google.com/gmail/api)" and click "ENABLE".
     2.  **Authentication (OAuth 2.0 Client ID):**
         * Go to "APIs & Services" > "Credentials".
         * Click "CONFIGURE CONSENT SCREEN".
@@ -32,16 +32,16 @@ To develop a personal tool that helps manage a cluttered Gmail inbox by providin
             * Developer contact information: Your email.
             * Save and Continue.
         * **Scopes:** Click "ADD OR REMOVE SCOPES".
-            * Search for "Gmail API" and select `.../auth/gmail.readonly`. (We'll adjust this for Phase Two).
+            * Search for "Gmail API" and select the [`gmail.readonly` scope](https://developers.google.com/gmail/api/auth/scopes). (We'll adjust this for Phase Two).
             * Add to your Ceded API. Save and Continue.
         * **Test Users:** Add your own Google email address. Save and Continue.
         * Back to Dashboard.
-        * Click "+ CREATE CREDENTIALS" > "OAuth client ID".
+        * Click "+ CREATE CREDENTIALS" > "[OAuth client ID](https://developers.google.com/identity/protocols/oauth2)".
         * **Application type:** "Desktop app".
         * Name: "Gmail Litter Box Desktop Client".
         * Click "CREATE".
-        * **Download JSON:** Click "DOWNLOAD JSON" to save your `credentials.json` file. **Keep this file secure and private!**
-    3.  **Retrieve Email Metadata:** Write Python code to fetch email metadata (sender, subject, date, size, attachment info) using `users.messages.list` and `users.messages.get` API calls, handling pagination for large inboxes.
+        * **Download JSON:** Click "DOWNLOAD JSON" to save your `credentials.json` file. This file is used by the [Python Google Client Library for Gmail API](https://developers.google.com/gmail/api/quickstart/python) for authentication. **Keep this file secure and private!**
+    3.  **Retrieve Email Metadata:** Write Python code to fetch email metadata (sender, subject, date, size, attachment info) using [`users.messages.list`](https://developers.google.com/gmail/api/reference/rest/v1/users.messages/list) and [`users.messages.get`](https://developers.google.com/gmail/api/reference/rest/v1/users.messages/get) API calls, handling pagination for large inboxes.
     4.  **Data Processing:** Process retrieved JSON data into structured Python objects (e.g., list of dictionaries, potentially Pandas DataFrame).
     5.  **Generate Insights:** Develop functions to analyze this data and compute the defined insights.
     6.  **Present Insights:** Display results in a clear, readable format (e.g., print to console, simple text summary).
@@ -55,8 +55,8 @@ To develop a personal tool that helps manage a cluttered Gmail inbox by providin
     * **Delete:** Emails from specific senders, emails older than X days/months, emails larger than Y MB.
     * **Label/Move:** Emails from certain senders, emails with specific subject keywords, emails from newsletters.
 * **Technical Steps (Future):**
-    1.  **Extended Authentication:** Update Gmail API scope to allow write access (`gmail.modify` or `gmail.compose`).
-    2.  **Action Functions:** Implement functions for deleting messages (`users.messages.delete`/`trash`) and applying/removing labels (`users.messages.modify`).
+    1.  **Extended Authentication:** Update Gmail API scope to allow write access ([`gmail.modify` scope](https://developers.google.com/gmail/api/auth/scopes) or [`gmail.compose` scope](https://developers.google.com/gmail/api/auth/scopes)).
+    2.  **Action Functions:** Implement functions for deleting messages ([`users.messages.delete`](https://developers.google.com/gmail/api/reference/rest/v1/users.messages/delete)/[`trash`](https://developers.google.com/gmail/api/reference/rest/v1/users.messages/trash)) and applying/removing labels ([`users.messages.modify`](https://developers.google.com/gmail/api/reference/rest/v1/users.messages/modify)).
     3.  **Rule Engine:** Design a flexible way for users to define rules (e.g., simple configuration file, command-line parameters).
     4.  **Confirmation/Dry Run:** Implement a confirmation step before executing bulk actions to prevent accidental deletion.
 * **Open Questions/Considerations:**
@@ -72,8 +72,7 @@ To develop a personal tool that helps manage a cluttered Gmail inbox by providin
 * **Technical Steps (Future):**
     1.  **Content Extraction:** Securely extract full email body content (after initial metadata processing).
     2.  **Data Preparation for AI:** Clean and format text for LLM input.
-    3.  **LLM API Integration:** Interact with a suitable LLM API (e.g., Google's Gemini API).
-        * **Gemini API Reference:** [https://ai.google.dev/docs](https://ai.google.dev/docs)
+    3.  **LLM API Integration:** Interact with a suitable [LLM API](https://ai.google.dev/docs) (e.g., [Google's Gemini API](https://ai.google.dev/docs)).
         * **Google AI Studio:** [https://aistudio.google.com/](https://aistudio.google.com/)
         * **Python SDK for Google Generative AI:** [https://ai.google.dev/gemma/docs/language_models](https://ai.google.dev/gemma/docs/language_models)
     4.  **Prompt Engineering:** Craft effective prompts to guide the AI to generate desired insights and recommendations.
@@ -83,14 +82,4 @@ To develop a personal tool that helps manage a cluttered Gmail inbox by providin
     * **Current Understanding/Approach:**
         * **Acceptance:** Acknowledge that the AI *will* process the content.
         * **Reliance on Provider:** Lean heavily on the AI provider's (e.g., Google) robust security, data handling policies, and commitment to not use data for model training.
-        * **Purpose Limitation:** Explicitly state the data is *only* for insights/recommendations.
-        * **Best Effort De-identification:** Consider client-side (your script) or provider-side (DLP services) attempts to redact specific PII *before* AI processing, understanding this is complex and might not be perfect.
-        * **Transparency:** Crucially, your privacy policy *must* be explicit about content processing by AI.
-    * **Why it's complex:** This involves philosophical, legal, and technical trade-offs. The goal is risk management and transparency, not zero risk.
-
----
-
-## III. General Considerations:
-* **Privacy:** Paramount throughout all phases. Emphasis on data minimization, transparency, consent, and secure processing.
-* **Modularity:** Build the tool in distinct, reusable components (API interaction, data processing, insight generation, action execution) for easier development and future expansion.
-* **User Interface:** Initially command-line based. Could evolve to a simple web interface later if desired.
+        * **Purpose Limitation:** Explicitly state the data is *only* for
