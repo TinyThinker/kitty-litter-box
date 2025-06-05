@@ -3,6 +3,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Google API credentials
+src/config/credentials.json
+src/token.pickle
+
 # C extensions
 *.so
 
