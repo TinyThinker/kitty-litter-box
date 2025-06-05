@@ -16,8 +16,31 @@ To develop a personal tool that helps manage a cluttered Gmail inbox by providin
     * Age Distribution of Emails (e.g., count of emails older than 1 year, 2 years).
     * Total Unread Email Count.
 * **Technical Steps:**
-    1.  **Google Cloud Project Setup & Gmail API Enablement:** Create a project in Google Cloud, enable the Gmail API.
-    2.  **Authentication:** Implement OAuth 2.0 using the Python Google Client Library. **Secrets (e.g., API key file path) will be managed via environment variables.**
+    1.  **Google Cloud Project Setup & Gmail API Enablement:**
+        * Go to the Google Cloud Console: [https://console.cloud.google.com/](https://console.cloud.google.com/)
+        * Create a New Project (e.g., "Gmail Inbox Manager").
+        * Navigate to "APIs & Services" > "Enabled APIs & services".
+        * Click "+ ENABLE APIS AND SERVICES".
+        * Search for "Gmail API" and click "ENABLE".
+    2.  **Authentication (OAuth 2.0 Client ID):**
+        * Go to "APIs & Services" > "Credentials".
+        * Click "CONFIGURE CONSENT SCREEN".
+        * **OAuth Consent Screen setup:**
+            * User Type: "External".
+            * App Name: "Gmail Kitty Litter Box".
+            * User support email: Your email.
+            * Developer contact information: Your email.
+            * Save and Continue.
+        * **Scopes:** Click "ADD OR REMOVE SCOPES".
+            * Search for "Gmail API" and select `.../auth/gmail.readonly`. (We'll adjust this for Phase Two).
+            * Add to your Ceded API. Save and Continue.
+        * **Test Users:** Add your own Google email address. Save and Continue.
+        * Back to Dashboard.
+        * Click "+ CREATE CREDENTIALS" > "OAuth client ID".
+        * **Application type:** "Desktop app".
+        * Name: "Gmail Litter Box Desktop Client".
+        * Click "CREATE".
+        * **Download JSON:** Click "DOWNLOAD JSON" to save your `credentials.json` file. **Keep this file secure and private!**
     3.  **Retrieve Email Metadata:** Write Python code to fetch email metadata (sender, subject, date, size, attachment info) using `users.messages.list` and `users.messages.get` API calls, handling pagination for large inboxes.
     4.  **Data Processing:** Process retrieved JSON data into structured Python objects (e.g., list of dictionaries, potentially Pandas DataFrame).
     5.  **Generate Insights:** Develop functions to analyze this data and compute the defined insights.
@@ -50,6 +73,9 @@ To develop a personal tool that helps manage a cluttered Gmail inbox by providin
     1.  **Content Extraction:** Securely extract full email body content (after initial metadata processing).
     2.  **Data Preparation for AI:** Clean and format text for LLM input.
     3.  **LLM API Integration:** Interact with a suitable LLM API (e.g., Google's Gemini API).
+        * **Gemini API Reference:** [https://ai.google.dev/docs](https://ai.google.dev/docs)
+        * **Google AI Studio:** [https://aistudio.google.com/](https://aistudio.google.com/)
+        * **Python SDK for Google Generative AI:** [https://ai.google.dev/gemma/docs/language_models](https://ai.google.dev/gemma/docs/language_models)
     4.  **Prompt Engineering:** Craft effective prompts to guide the AI to generate desired insights and recommendations.
     5.  **Parsing AI Output:** Process the LLM's natural language response into structured recommendations.
 * **CRITICAL OPEN QUESTION: Privacy & Content Handling:**
