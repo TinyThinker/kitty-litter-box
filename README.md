@@ -83,3 +83,26 @@ To develop a personal tool that helps manage a cluttered Gmail inbox by providin
         * **Acceptance:** Acknowledge that the AI *will* process the content.
         * **Reliance on Provider:** Lean heavily on the AI provider's (e.g., Google) robust security, data handling policies, and commitment to not use data for model training.
         * **Purpose Limitation:** Explicitly state the data is *only* for
+
+## CLI Application Usage
+
+This section provides documentation for using the command-line interface (CLI) application.
+
+Run the script from the root of the project using `python src/MessageAccesor.py [command] [options]`.
+
+Available commands:
+
+*   `list-labels`: Lists all Gmail labels for the user.
+    *   Usage: `python src/MessageAccesor.py list-labels`
+
+*   `list-messages`: Lists messages based on provided criteria.
+    *   Usage: `python src/MessageAccesor.py list-messages [--label-ids LABEL_IDS [LABEL_IDS ...]] [--max-results MAX_RESULTS] [--query QUERY]`
+    *   `--label-ids`: Space-separated list of label IDs to filter by (e.g., INBOX, SENT, SPAM). Default: INBOX.
+    *   `--max-results`: Maximum number of messages to return. Default: 10.
+    *   `--query` , `-q`: Gmail search query (e.g., 'from:user@example.com is:unread').
+
+*   `get-message`: Get a specific message by ID.
+    *   Usage: `python src/MessageAccesor.py get-message MESSAGE_ID [--format {full,metadata,raw,minimal}]`
+    *   `MESSAGE_ID`: The ID of the message to retrieve.
+    *   `--format`: Format of the message to retrieve. Choices: full, metadata, raw, minimal. Default: metadata.
+
