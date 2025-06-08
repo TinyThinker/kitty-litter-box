@@ -12,9 +12,9 @@ import email # For parsing raw email data if you fetch 'raw' format
 import argparse # For command-line interface
 
 # If modifying these SCOPES, delete the file token.pickle.
-SCOPES = ['https://www.googleapis.com/auth/gmail.readonly'] # Readonly access is sufficient for listing labels
+SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
 CREDENTIALS_FILENAME = os.path.join(os.path.dirname(__file__), 'config', 'credentials.json') # TODO: 
-TOKEN_FILENAME = os.path.join(os.path.dirname(__file__), 'token.pickle') # Store token in the same dir as the script
+TOKEN_FILENAME = os.path.join(os.path.dirname(__file__), 'token.pickle')
  
 class MessageAccesor:
     def __init__(self):
@@ -24,7 +24,7 @@ class MessageAccesor:
             if not self.flow.redirect_uri:
                 self.flow.redirect_uri = 'http://localhost:0' # Or a specific port
         else:
-            print(f"Error: Credentials file not found at {CREDENTIALS_FILENAME}")
+            raise FileNotFoundError(f"Credentials file not found at {CREDENTIALS_FILENAME}")
 
 
     def get_gmail_service(self):
@@ -32,38 +32,28 @@ class MessageAccesor:
         Lists the user's Gmail labels.
         """
         creds = None
-        # The file token.pickle stores the user's access and refresh tokens, and is
-        # created automatically when the authorization flow completes for the first
-        # time.
-        # Note: Google's newer examples might use token.json.
-        # If you prefer token.json, you can adapt the credential saving/loading.
-        # token_file = 'token.pickle' # Old way
-
         if os.path.exists(TOKEN_FILENAME):
             with open(TOKEN_FILENAME, 'rb') as token:
                 creds = pickle.load(token)
 
-        # If there are no (valid) credentials available, let the user log in.
         if not creds or not creds.valid:
+            # Case 1: Try refreshing expired credentials
             if creds and creds.expired and creds.refresh_token:
                 try:
                     creds.refresh(Request())
+                    # If refresh succeeds, we can continue with these credentials
                 except Exception as e:
-                    print(f"Failed to refresh token: {e}")
-                    print("Attempting to re-authenticate...")
-                    creds = None # Force re-authentication
-            if not creds: # If refresh failed or no creds at all
+                    print(f"Failed to refresh credentials: {e}")
+                    creds = None  # Invalidate credentials to trigger new auth flow
+            
+            # Case 2: No valid credentials available, need to run auth flow
+            if not creds or not creds.valid:
                 try:
-                    # Ensure redirect_uris in credentials.json includes "http://localhost:port"
-                    # or "urn:ietf:wg:oauth:2.0:oob" for installed apps.
-                    # The port for localhost can be any available port.
-                    # For this example, let's assume it will use a default or prompt.
-                    creds = self.flow.run_local_server(port=0) # port=0 finds a free port
+                    creds = self.flow.run_local_server(port=0)  # port=0 finds a free port
                 except Exception as e:
-                    print(f"Error during authentication flow: {e}")
-                    print("Please ensure your credentials.json is configured correctly for an Installed App.")
-                    print("The redirect URI might need to be 'http://localhost:PORT' or 'urn:ietf:wg:oauth:2.0:oob'.")
-                    return None
+                    raise RuntimeError(f"Error during authentication flow: {e}. " 
+                                      f"Please ensure your credentials.json is configured correctly.")
+            
             # Save the credentials for the next run
             with open(TOKEN_FILENAME, 'wb') as token:
                 pickle.dump(creds, token)
