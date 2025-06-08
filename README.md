@@ -106,3 +106,7 @@ Available commands:
     *   `MESSAGE_ID`: The ID of the message to retrieve.
     *   `--format`: Format of the message to retrieve. Choices: full, metadata, raw, minimal. Default: metadata.
 
+*   `get-all-inbox-metadata`: Fetches metadata for all messages in the INBOX.
+    *   Usage: `python src/MessageAccesor.py get-all-inbox-metadata`
+    *   This command iterates through all messages in the INBOX, retrieves their metadata, stores it in memory for the current session, and prints a summary.
+

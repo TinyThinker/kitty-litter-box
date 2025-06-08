@@ -27,6 +27,7 @@ class MessageAccesor:
             raise FileNotFoundError(f"Credentials file not found at {CREDENTIALS_FILENAME}")
         
         self.service = None  # Initialize service as None
+        self.all_messages_metadata = [] # To store metadata of all fetched messages
 
     def get_gmail_service(self):
         """Gets or creates a Gmail API service object.
@@ -204,6 +205,48 @@ class MessageAccesor:
         except Exception as e:
             print(f"An unexpected error occurred while processing message {message_id}: {e}")
 
+    def get_all_messages(self):
+        """Fetches metadata for all messages in the INBOX and stores them."""
+        try:
+            service = self.get_gmail_service()
+            if not service:
+                print("Failed to get Gmail service.")
+                return
+
+            print("\nFetching all message metadata from INBOX...")
+            self.all_messages_metadata = []
+            page_token = None
+            total_messages_fetched = 0
+            
+            while True:
+                response = service.users().messages().list(
+                    userId='me',
+                    labelIds=['INBOX'],
+                    pageToken=page_token
+                ).execute()
+                
+                messages = response.get('messages', [])
+                if messages:
+                    self.all_messages_metadata.extend(messages)
+                    total_messages_fetched += len(messages)
+                    print(f"Fetched {len(messages)} messages... (Total: {total_messages_fetched})")
+
+                page_token = response.get('nextPageToken')
+                if not page_token:
+                    break # No more pages
+
+            if not self.all_messages_metadata:
+                print("No messages found in INBOX.")
+            else:
+                print(f"\nSuccessfully fetched metadata for {total_messages_fetched} messages from INBOX.")
+                print(f"First few message IDs: {[msg['id'] for msg in self.all_messages_metadata[:3]]}...")
+                # You can add more summary details here if needed
+            
+        except HttpError as error:
+            print(f'An API error occurred while fetching all messages: {error}')
+        except Exception as e:
+            print(f"An unexpected error occurred while fetching all messages: {e}")
+
 
 def main():
     """
@@ -226,6 +269,10 @@ def main():
     parser_get_message.add_argument("message_id", help="The ID of the message to retrieve.")
     parser_get_message.add_argument("--format", choices=['full', 'metadata', 'raw', 'minimal'], default='metadata', help="Format of the message to retrieve. Default: metadata")
 
+    # Subparser for getting all messages metadata from INBOX
+    parser_get_all_messages = subparsers.add_parser("get-all-inbox-metadata", help="Fetch metadata for all messages in the INBOX.")
+    # No specific arguments for this command yet, but can be added (e.g., batch_size)
+
     args = parser.parse_args()
 
     print("Attempting to connect to Gmail API...")
@@ -237,6 +284,8 @@ def main():
         msg_accessor.list_messages_cmd(args.label_ids, args.max_results, args.query)
     elif args.command == "get-message":
         msg_accessor.get_message_detail(args.message_id, args.format)
+    elif args.command == "get-all-inbox-metadata":
+        msg_accessor.get_all_messages()
     else:
         parser.print_help()
 
