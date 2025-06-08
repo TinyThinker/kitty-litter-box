@@ -25,12 +25,18 @@ class MessageAccesor:
                 self.flow.redirect_uri = 'http://localhost:0' # Or a specific port
         else:
             raise FileNotFoundError(f"Credentials file not found at {CREDENTIALS_FILENAME}")
-
+        
+        self.service = None  # Initialize service as None
 
     def get_gmail_service(self):
-        """Shows basic usage of the Gmail API.
-        Lists the user's Gmail labels.
+        """Gets or creates a Gmail API service object.
+        If the service has already been created, returns the existing service.
+        Otherwise, creates a new one.
         """
+        # Return existing service if already created
+        if self.service:
+            return self.service
+            
         creds = None
         if os.path.exists(TOKEN_FILENAME):
             with open(TOKEN_FILENAME, 'rb') as token:
@@ -60,8 +66,8 @@ class MessageAccesor:
                 print(f"Token saved to {TOKEN_FILENAME}")
 
         try:
-            service = build('gmail', 'v1', credentials=creds)
-            return service
+            self.service = build('gmail', 'v1', credentials=creds)
+            return self.service
         except HttpError as error:
             print(f'An API error occurred: {error}')
             # Details for common errors
@@ -74,114 +80,129 @@ class MessageAccesor:
             print(f"An unexpected error occurred while building the service: {e}")
             return None
 
-def list_labels(service):
-    """Lists all Gmail labels for the user."""
-    try:
-        print("\nFetching Gmail labels...")
-        results = service.users().labels().list(userId='me').execute()
-        labels = results.get('labels', [])
-        if not labels:
-            print('No labels found.')
-        else:
-            print('Labels:')
-            for label in labels:
-                print(f"- {label['name']} (ID: {label['id']})")
-    except HttpError as error:
-        print(f'An API error occurred while listing labels: {error}')
-
-def list_messages_cmd(service, label_ids, max_results, query):
-    """Lists messages based on provided criteria."""
-    try:
-        print(f"\nFetching messages (max: {max_results}, labels: {label_ids}, query: '{query or 'N/A'}')...")
-        list_response = service.users().messages().list(
-            userId='me',
-            labelIds=label_ids,
-            maxResults=max_results,
-            q=query
-        ).execute()
-        messages = list_response.get('messages', [])
-
-        if not messages:
-            print("No messages found matching your criteria.")
-        else:
-            print("Found Messages (ID and Thread ID):")
-            for message_stub in messages:
-                print(f"  ID: {message_stub['id']}, Thread ID: {message_stub['threadId']}")
-            print("\nUse 'get-message <ID>' to fetch full details of a message.")
-    except HttpError as error:
-        print(f'An API error occurred while listing messages: {error}')
-
-def get_message_detail(service, message_id, msg_format):
-    """Gets and displays a specific message."""
-    try:
-        print(f"\nFetching message ID: {message_id} with format: {msg_format}...")
-        message = service.users().messages().get(userId='me', id=message_id, format=msg_format).execute()
-
-        print(f"Message ID: {message.get('id')}")
-        print(f"Thread ID: {message.get('threadId')}")
-        print(f"Snippet: {message.get('snippet', 'N/A')}")
-
-        if 'labelIds' in message:
-            print(f"Labels: {', '.join(message['labelIds'])}")
-
-        if msg_format == 'raw':
-            if 'raw' in message:
-                raw_email_data = base64.urlsafe_b64decode(message['raw'].encode('ASCII'))
-                print("\n--- Raw Email Data (decoded) ---")
-                email_message = email.message_from_bytes(raw_email_data)
-                print(f"Subject (from raw): {email_message['subject']}")
-                print(f"From (from raw): {email_message['from']}")
-                print(f"To (from raw): {email_message['to']}")
-
-                if email_message.is_multipart():
-                    for part in email_message.walk():
-                        ctype = part.get_content_type()
-                        cdispo = str(part.get('Content-Disposition'))
-                        if ctype == 'text/plain' and 'attachment' not in cdispo:
-                            body = part.get_payload(decode=True)
-                            print("\n--- Plain Text Body (from raw) ---")
-                            print(body.decode('utf-8', errors='replace'))
-                            break
-                else:
-                    body = email_message.get_payload(decode=True)
-                    print("\n--- Body (from raw) ---")
-                    print(body.decode('utf-8', errors='replace'))
+    def list_labels(self):
+        """Lists all Gmail labels for the user."""
+        try:
+            service = self.get_gmail_service()
+            if not service:
+                print("Failed to get Gmail service.")
+                return
+                
+            print("\nFetching Gmail labels...")
+            results = service.users().labels().list(userId='me').execute()
+            labels = results.get('labels', [])
+            if not labels:
+                print('No labels found.')
             else:
-                print("Raw data not found in response.")
-        elif msg_format == 'full' or msg_format == 'metadata': # 'metadata' also includes payload headers
-            payload = message.get('payload')
-            if payload:
-                headers = payload.get('headers', [])
-                print("\n--- Headers ---")
-                for header in headers:
-                    print(f"{header['name']}: {header['value']}")
+                print('Labels:')
+                for label in labels:
+                    print(f"- {label['name']} (ID: {label['id']})")
+        except HttpError as error:
+            print(f'An API error occurred while listing labels: {error}')
 
-                if msg_format == 'full': # Only parse body if 'full' format requested
-                    print("\n--- Message Body (from 'full' format) ---")
-                    parts = payload.get('parts')
-                    if parts: # Multipart message
-                        for part in parts:
-                            if part.get('mimeType') == 'text/plain':
-                                body_data = part.get('body', {}).get('data')
-                                if body_data:
-                                    text = base64.urlsafe_b64decode(body_data).decode('utf-8', errors='replace')
-                                    print("Plain Text Part:\n", text)
-                                    break # Show first plain text part
-                            # Could add handling for text/html here too
-                    elif payload.get('body', {}).get('data'): # Non-multipart message
-                        body_data = payload.get('body', {}).get('data')
-                        if body_data:
-                            text = base64.urlsafe_b64decode(body_data).decode('utf-8', errors='replace')
-                            print("Body:\n", text)
+    def list_messages_cmd(self, label_ids, max_results, query):
+        """Lists messages based on provided criteria."""
+        try:
+            service = self.get_gmail_service()
+            if not service:
+                print("Failed to get Gmail service.")
+                return
+                
+            print(f"\nFetching messages (max: {max_results}, labels: {label_ids}, query: '{query or 'N/A'}')...")
+            list_response = service.users().messages().list(
+                userId='me',
+                labelIds=label_ids,
+                maxResults=max_results,
+                q=query
+            ).execute()
+            messages = list_response.get('messages', [])
+
+            if not messages:
+                print("No messages found matching your criteria.")
+            else:
+                print("Found Messages (ID and Thread ID):")
+                for message_stub in messages:
+                    print(f"  ID: {message_stub['id']}, Thread ID: {message_stub['threadId']}")
+                print("\nUse 'get-message <ID>' to fetch full details of a message.")
+        except HttpError as error:
+            print(f'An API error occurred while listing messages: {error}')
+
+    def get_message_detail(self, message_id, msg_format):
+        """Gets and displays a specific message."""
+        try:
+            service = self.get_gmail_service()
+            if not service:
+                print("Failed to get Gmail service.")
+                return
+                
+            print(f"\nFetching message ID: {message_id} with format: {msg_format}...")
+            message = service.users().messages().get(userId='me', id=message_id, format=msg_format).execute()
+
+            print(f"Message ID: {message.get('id')}")
+            print(f"Thread ID: {message.get('threadId')}")
+            print(f"Snippet: {message.get('snippet', 'N/A')}")
+
+            if 'labelIds' in message:
+                print(f"Labels: {', '.join(message['labelIds'])}")
+
+            if msg_format == 'raw':
+                if 'raw' in message:
+                    raw_email_data = base64.urlsafe_b64decode(message['raw'].encode('ASCII'))
+                    print("\n--- Raw Email Data (decoded) ---")
+                    email_message = email.message_from_bytes(raw_email_data)
+                    print(f"Subject (from raw): {email_message['subject']}")
+                    print(f"From (from raw): {email_message['from']}")
+                    print(f"To (from raw): {email_message['to']}")
+
+                    if email_message.is_multipart():
+                        for part in email_message.walk():
+                            ctype = part.get_content_type()
+                            cdispo = str(part.get('Content-Disposition'))
+                            if ctype == 'text/plain' and 'attachment' not in cdispo:
+                                body = part.get_payload(decode=True)
+                                print("\n--- Plain Text Body (from raw) ---")
+                                print(body.decode('utf-8', errors='replace'))
+                                break
                     else:
-                        print("No decodable body found in 'full' format payload.")
-            else:
-                print("Payload not found in response.")
+                        body = email_message.get_payload(decode=True)
+                        print("\n--- Body (from raw) ---")
+                        print(body.decode('utf-8', errors='replace'))
+                else:
+                    print("Raw data not found in response.")
+            elif msg_format == 'full' or msg_format == 'metadata': # 'metadata' also includes payload headers
+                payload = message.get('payload')
+                if payload:
+                    headers = payload.get('headers', [])
+                    print("\n--- Headers ---")
+                    for header in headers:
+                        print(f"{header['name']}: {header['value']}")
 
-    except HttpError as error:
-        print(f'An API error occurred while fetching message {message_id}: {error}')
-    except Exception as e:
-        print(f"An unexpected error occurred while processing message {message_id}: {e}")
+                    if msg_format == 'full': # Only parse body if 'full' format requested
+                        print("\n--- Message Body (from 'full' format) ---")
+                        parts = payload.get('parts')
+                        if parts: # Multipart message
+                            for part in parts:
+                                if part.get('mimeType') == 'text/plain':
+                                    body_data = part.get('body', {}).get('data')
+                                    if body_data:
+                                        text = base64.urlsafe_b64decode(body_data).decode('utf-8', errors='replace')
+                                        print("Plain Text Part:\n", text)
+                                        break # Show first plain text part
+                                # Could add handling for text/html here too
+                        elif payload.get('body', {}).get('data'): # Non-multipart message
+                            body_data = payload.get('body', {}).get('data')
+                            if body_data:
+                                text = base64.urlsafe_b64decode(body_data).decode('utf-8', errors='replace')
+                                print("Body:\n", text)
+                        else:
+                            print("No decodable body found in 'full' format payload.")
+                else:
+                    print("Payload not found in response.")
+
+        except HttpError as error:
+            print(f'An API error occurred while fetching message {message_id}: {error}')
+        except Exception as e:
+            print(f"An unexpected error occurred while processing message {message_id}: {e}")
 
 
 def main():
@@ -209,18 +230,13 @@ def main():
 
     print("Attempting to connect to Gmail API...")
     msg_accessor = MessageAccesor()
-    service = msg_accessor.get_gmail_service()
-
-    if not service:
-        print("Failed to get Gmail service. Exiting.")
-        return
 
     if args.command == "list-labels":
-        list_labels(service)
+        msg_accessor.list_labels()
     elif args.command == "list-messages":
-        list_messages_cmd(service, args.label_ids, args.max_results, args.query)
+        msg_accessor.list_messages_cmd(args.label_ids, args.max_results, args.query)
     elif args.command == "get-message":
-        get_message_detail(service, args.message_id, args.format)
+        msg_accessor.get_message_detail(args.message_id, args.format)
     else:
         parser.print_help()
 
