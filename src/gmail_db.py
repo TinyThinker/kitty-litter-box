@@ -1,16 +1,13 @@
 import sqlite3
 import os
-import json
-from datetime import datetime
-
-# Get path to token.pickle from MessageAccesor
-from MessageAccesor import TOKEN_FILENAME
+from src.config import TOKEN_FILENAME
 
 # Define the default database filename
 DB_FILENAME = 'gmail_cache.db'
 DEFAULT_DB_PATH = os.path.join(os.path.dirname(TOKEN_FILENAME), DB_FILENAME)
 
 class GmailCacheDB:
+    # Rest of the class remains unchanged
     """
     A class for managing the SQLite database that caches Gmail message data.
     This class handles database initialization, connection management,

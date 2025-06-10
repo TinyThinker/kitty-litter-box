@@ -6,15 +6,15 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from googleapiclient.http import BatchHttpRequest  # For batch requests
 
 import base64 # For decoding message body
 import email # For parsing raw email data if you fetch 'raw' format
 import argparse # For command-line interface
+import json # For handling JSON string conversions
 
-# If modifying these SCOPES, delete the file token.pickle.
-SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
-CREDENTIALS_FILENAME = os.path.join(os.path.dirname(__file__), 'config', 'credentials.json') # TODO: 
-TOKEN_FILENAME = os.path.join(os.path.dirname(__file__), 'token.pickle')
+from src.config import TOKEN_FILENAME, SCOPES, CREDENTIALS_FILENAME
+from src.gmail_db import GmailCacheDB
  
 class MessageAccesor:
     def __init__(self):
@@ -28,6 +28,26 @@ class MessageAccesor:
         
         self.service = None  # Initialize service as None
         self.all_messages_metadata = [] # To store metadata of all fetched messages
+        # Create a database connection
+        self.db = GmailCacheDB()
+        
+    def _get_header(self, headers, name):
+        """Helper function to extract header value by name (case-insensitive)
+        
+        Args:
+            headers (list): List of header dictionaries with 'name' and 'value' keys
+            name (str): The name of the header to find
+            
+        Returns:
+            str: The value of the header if found, None otherwise
+        """
+        if not headers:
+            return None
+            
+        for header in headers:
+            if header['name'].lower() == name.lower():
+                return header['value']
+        return None
 
     def get_gmail_service(self):
         """Gets or creates a Gmail API service object.
@@ -203,10 +223,10 @@ class MessageAccesor:
         except HttpError as error:
             print(f'An API error occurred while fetching message {message_id}: {error}')
         except Exception as e:
-            print(f"An unexpected error occurred while processing message {message_id}: {e}")
-
+            print(f"An unexpected error occurred while processing message {message_id}: {e}")    
+    
     def get_all_messages(self):
-        """Fetches metadata for all messages in the INBOX and stores them."""
+        """Fetches metadata for all messages in the INBOX and stores them in the database."""
         try:
             service = self.get_gmail_service()
             if not service:
@@ -218,29 +238,168 @@ class MessageAccesor:
             page_token = None
             total_messages_fetched = 0
             
-            while True:
-                response = service.users().messages().list(
-                    userId='me',
-                    labelIds=['INBOX'],
-                    pageToken=page_token
-                ).execute()
+            # Get a database connection
+            conn = self.db.get_db_connection()
+            cursor = conn.cursor()
+            
+            try:
+                # Fetch message stubs and insert them into the database
+                while True:
+                    response = service.users().messages().list(
+                        userId='me',
+                        labelIds=['INBOX'],
+                        pageToken=page_token
+                    ).execute()
+                    
+                    messages = response.get('messages', [])
+                    if messages:
+                        self.all_messages_metadata.extend(messages)
+                        total_messages_fetched += len(messages)
+                        print(f"Fetched {len(messages)} message stubs... (Total: {total_messages_fetched})")
+                        
+                        # Insert or update message stubs in the database
+                        stub_data = [(msg['id'], msg['threadId']) for msg in messages]
+                        cursor.executemany(
+                            "INSERT OR REPLACE INTO message_stubs (message_id, thread_id) VALUES (?, ?)",
+                            stub_data
+                        )
+                        conn.commit()
+
+                    page_token = response.get('nextPageToken')
+                    if not page_token:
+                        break # No more pages
                 
-                messages = response.get('messages', [])
-                if messages:
-                    self.all_messages_metadata.extend(messages)
-                    total_messages_fetched += len(messages)
-                    print(f"Fetched {len(messages)} messages... (Total: {total_messages_fetched})")
-
-                page_token = response.get('nextPageToken')
-                if not page_token:
-                    break # No more pages
-
-            if not self.all_messages_metadata:
-                print("No messages found in INBOX.")
-            else:
-                print(f"\nSuccessfully fetched metadata for {total_messages_fetched} messages from INBOX.")
-                print(f"First few message IDs: {[msg['id'] for msg in self.all_messages_metadata[:3]]}...")
-                # You can add more summary details here if needed
+                if not self.all_messages_metadata:
+                    print("No messages found in INBOX.")
+                    return
+                
+                print(f"\nSuccessfully fetched metadata for {total_messages_fetched} message stubs from INBOX.")
+                
+                # Now fetch rich metadata for messages that don't have it yet
+                print("\nFetching rich metadata for messages...")
+                
+                # Query to find message IDs without rich metadata
+                cursor.execute("""
+                    SELECT s.message_id 
+                    FROM message_stubs s 
+                    LEFT JOIN message_rich_metadata r ON s.message_id = r.message_id 
+                    WHERE r.message_id IS NULL
+                """)
+                
+                missing_ids = [row[0] for row in cursor.fetchall()]
+                
+                if not missing_ids:
+                    print("No new messages to fetch rich metadata for.")
+                    return
+                
+                print(f"Need to fetch rich metadata for {len(missing_ids)} messages.")
+                
+                # Process in batches of 50
+                BATCH_SIZE = 50
+                total_processed = 0
+                
+                for i in range(0, len(missing_ids), BATCH_SIZE):
+                    batch_ids = missing_ids[i:i + BATCH_SIZE]
+                    total_processed += len(batch_ids)
+                    print(f"Processing batch {i//BATCH_SIZE + 1} ({len(batch_ids)} messages, {total_processed}/{len(missing_ids)} total)")
+                    
+                    # Data to insert for this batch
+                    rich_metadata_to_insert = []
+                    
+                    # Create a batch request
+                    batch = service.new_batch_http_request()
+                    
+                    # Define a callback function for each request in the batch
+                    def callback_factory(msg_id):
+                        def callback(request_id, response, exception):
+                            if exception:
+                                print(f"Error fetching message {msg_id}: {exception}")
+                                return
+                                
+                            # Extract metadata fields
+                            snippet = response.get('snippet', '')
+                            internal_date = response.get('internalDate')
+                            size_estimate = response.get('sizeEstimate')
+                            label_ids = json.dumps(response.get('labelIds', []))
+                            
+                            payload = response.get('payload', {})
+                            headers = payload.get('headers', [])
+                            
+                            # Extract From and Subject headers
+                            from_address = self._get_header(headers, 'From')
+                            subject = self._get_header(headers, 'Subject')
+                            
+                            # Store all headers as JSON
+                            payload_headers_json = json.dumps(headers)
+                            
+                            # Check for attachments
+                            has_attachments = 0
+                            attachment_filenames = []
+                            
+                            # Helper function to check for attachments recursively
+                            def check_for_attachments(part):
+                                if 'filename' in part and part['filename']:
+                                    return True, part['filename']
+                                
+                                if 'parts' in part:
+                                    for subpart in part['parts']:
+                                        has_att, filename = check_for_attachments(subpart)
+                                        if has_att:
+                                            return True, filename
+                                            
+                                return False, None
+                            
+                            # Check payload for attachments
+                            if 'parts' in payload:
+                                for part in payload['parts']:
+                                    has_att, filename = check_for_attachments(part)
+                                    if has_att and filename:
+                                        has_attachments = 1
+                                        attachment_filenames.append(filename)
+                            
+                            # Add this message's data to our list for batch insertion
+                            rich_metadata_to_insert.append((
+                                msg_id,
+                                snippet,
+                                internal_date,
+                                size_estimate,
+                                from_address,
+                                subject,
+                                label_ids,
+                                has_attachments,
+                                json.dumps(attachment_filenames) if attachment_filenames else None,
+                                payload_headers_json
+                            ))
+                            
+                        return callback
+                    
+                    # Add each message to the batch request
+                    for msg_id in batch_ids:
+                        batch.add(
+                            service.users().messages().get(userId='me', id=msg_id, format='metadata'),
+                            callback=callback_factory(msg_id)
+                        )
+                    
+                    # Execute the batch request
+                    batch.execute()
+                    
+                    # Insert all the rich metadata we collected
+                    if rich_metadata_to_insert:
+                        cursor.executemany("""
+                            INSERT OR REPLACE INTO message_rich_metadata (
+                                message_id, snippet, internal_date, size_estimate, 
+                                from_address, subject, label_ids_json, 
+                                has_attachments, attachment_filenames_json, payload_headers_json
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, rich_metadata_to_insert)
+                        conn.commit()
+                        print(f"Saved rich metadata for {len(rich_metadata_to_insert)} messages.")
+                    
+                print(f"\nCompleted fetching rich metadata for {total_processed} messages.")
+                
+            finally:
+                # Always close the connection
+                self.db.close_connection(conn)
             
         except HttpError as error:
             print(f'An API error occurred while fetching all messages: {error}')

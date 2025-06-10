@@ -7,6 +7,9 @@ __pycache__/
 src/config/credentials.json
 src/token.pickle
 
+# DB File
+src/gmail_cache.db
+
 # C extensions
 *.so
 
