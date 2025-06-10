@@ -10,16 +10,14 @@ from MessageAccesor import TOKEN_FILENAME
 DB_FILENAME = 'gmail_cache.db'
 DEFAULT_DB_PATH = os.path.join(os.path.dirname(TOKEN_FILENAME), DB_FILENAME)
 
-# Current schema version - increment this when schema changes
-SCHEMA_VERSION = 1
-
 class GmailCacheDB:
     """
     A class for managing the SQLite database that caches Gmail message data.
     This class handles database initialization, connection management,
     and operations for storing and retrieving Gmail message metadata.
     """
-      def __init__(self, db_path=None):
+    
+    def __init__(self, db_path=None):
         """
         Initialize the GmailCacheDB with an optional custom database path.
         
@@ -35,15 +33,8 @@ class GmailCacheDB:
         if db_dir and not os.path.exists(db_dir):
             os.makedirs(db_dir, exist_ok=True)
         
-        # Check if database needs initialization (tables created)
-        db_exists = os.path.exists(self.db_path) and os.path.getsize(self.db_path) > 0
-        
-        # Only initialize if the database file doesn't exist or is empty
-        if not db_exists:
-            print(f"Initializing new database at {self.db_path}")
-            self._initialize_database()
-        else:
-            print(f"Using existing database at {self.db_path}")
+        # Initialize the database (create tables if they don't exist)
+        self._initialize_database()
     
     def _initialize_database(self):
         """
